@@ -1,6 +1,6 @@
 name: Veracode Security Scan
 
-on: 
+on:
   pull_request:
     branches:
       - master
@@ -41,7 +41,4 @@ jobs:
           scantimeout: 30
           vid: '${{ secrets.API_ID }}'
           vkey: '${{ secrets.API_KEY }}'
-
-        
-     
-        
+          edit_pr_comment: true

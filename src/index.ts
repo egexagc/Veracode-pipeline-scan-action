@@ -8,7 +8,8 @@ import { commitBasline } from './commit';
 import { json } from 'stream/consumers';
 import { stringify } from 'querystring';
 import { env } from "process";
-import * as github from '@actions/github'
+import * as github from '@actions/github';
+import { createComment } from './create-comment';
 
 // get input params
 let parameters:any = {}
@@ -109,13 +110,15 @@ parameters['store_baseline_file_branch'] = store_baseline_file_branch
 
 const create_baseline_from = core.getInput('create_baseline_from', {required: false} );
 parameters['create_baseline_from'] = create_baseline_from
-//standard or filtered 
+//standard or filtered
 
 const fail_build = core.getInput('fail_build', {required: false} );
 parameters['fail_build'] = fail_build
-//true or false 
+//true or false
 
-
+const edit_pr_comment = core.getInput('edit_pr_comment', {required: false} );
+parameters['edit_pr_comment'] = edit_pr_comment
+//true or false
 
 
 
@@ -169,48 +172,7 @@ async function run (parameters:any){
 
         if ( scanCommandOutput.length >= 1 ){
             core.info('Results are not empty - adding PR comment')
-
-            const context = github.context
-            const repository:any = process.env.GITHUB_REPOSITORY
-            const token = core.getInput("token")
-            const repo = repository.split("/");
-            const commentID:any = context.payload.pull_request?.number
-
-
-            //creating the body for the comment
-            let commentBody = scanCommandOutput
-            commentBody = commentBody.substring(commentBody.indexOf('Scan Summary'))
-            commentBody = commentBody.replace('===\n---','===\n<details><summary>details</summary><p>\n---')
-            commentBody = commentBody.replace('---\n\n===','---\n</p></details>\n===')
-            commentBody = commentBody.replace(/\n/g,'<br>')
-            commentBody = '<br>![](https://www.veracode.com/themes/veracode_new/library/img/veracode-black-hires.svg)<br>' + commentBody
-
-            core.info('Comment Body '+commentBody)
-
-
-            if (parameters.debug == 1 ){
-                core.info('---- DEBUG OUTPUT START ----')
-                core.info('---- index.ts / run() check if on PR  ----')
-                core.info('---- Repository: '+repository)
-                core.info('---- Token: '+token)
-                core.info('---- Comment ID: '+commentID)
-                //core.info('---- Context: '+JSON.stringify(context))
-                core.info('---- DEBUG OUTPUT END ----')
-            }
-
-            try {
-                const octokit = github.getOctokit(token);
-
-                const { data: comment } = await octokit.rest.issues.createComment({
-                    owner: repo[0],
-                    repo: repo[1],
-                    issue_number: commentID,
-                    body: commentBody,
-                });
-                core.info('Adding scan results as comment to PR #'+commentID)
-            } catch (error:any) {
-                core.info(error);
-            }
+            await createComment(parameters, scanCommandOutput);
         }
         else {
             core.info('Results are empty - no need to add PR comment')
@@ -228,7 +190,7 @@ async function run (parameters:any){
             core.info('---- DEBUG OUTPUT START ----')
             core.info('---- index.ts / run() check if we need to fail the build ----')
             core.info('---- Fail build value found : '+failBuild)
-            core.info('---- DEBUG OUTPUT END ----')     
+            core.info('---- DEBUG OUTPUT END ----')
         }
 
 
