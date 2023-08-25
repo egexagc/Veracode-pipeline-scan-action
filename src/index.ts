@@ -109,11 +109,11 @@ parameters['store_baseline_file_branch'] = store_baseline_file_branch
 
 const create_baseline_from = core.getInput('create_baseline_from', {required: false} );
 parameters['create_baseline_from'] = create_baseline_from
-//standard or filtered 
+//standard or filtered
 
 const fail_build = core.getInput('fail_build', {required: false} );
 parameters['fail_build'] = fail_build
-//true or false 
+//true or false
 
 
 
@@ -175,7 +175,7 @@ async function run (parameters:any){
             const token = core.getInput("token")
             const repo = repository.split("/");
             const commentID:any = context.payload.pull_request?.number
-
+            const watermark = `<!-- veracode scan comment: ${context.job} -->`
 
             //creating the body for the comment
             let commentBody = scanCommandOutput
@@ -183,7 +183,7 @@ async function run (parameters:any){
             commentBody = commentBody.replace('===\n---','===\n<details><summary>details</summary><p>\n---')
             commentBody = commentBody.replace('---\n\n===','---\n</p></details>\n===')
             commentBody = commentBody.replace(/\n/g,'<br>')
-            commentBody = '<br>![](https://www.veracode.com/themes/veracode_new/library/img/veracode-black-hires.svg)<br>' + commentBody
+            commentBody = watermark + '<br>![](https://www.veracode.com/themes/veracode_new/library/img/veracode-black-hires.svg)<br>' + commentBody
 
             core.info('Comment Body '+commentBody)
 
@@ -200,14 +200,42 @@ async function run (parameters:any){
 
             try {
                 const octokit = github.getOctokit(token);
+                let isUpdated = false;
 
-                const { data: comment } = await octokit.rest.issues.createComment({
-                    owner: repo[0],
-                    repo: repo[1],
-                    issue_number: commentID,
-                    body: commentBody,
-                });
-                core.info('Adding scan results as comment to PR #'+commentID)
+                if (parameters.edit_pr_comment == 'true') {
+                    const { data: comments } = await octokit.rest.issues.listComments({
+                        owner: repo[0],
+                        repo: repo[1],
+                        issue_number: commentID,
+                    });
+
+                    const comment = comments.find(
+                        (c) =>
+                          c.user?.login === 'github-actions[bot]' &&
+                          c.body?.startsWith(watermark)
+                    );
+
+                    if (comment) {
+                        core.info('Found previous comment, updating #' + comment.id)
+                        isUpdated = true
+                        await octokit.rest.issues.updateComment({
+                          owner: repo[0],
+                          repo: repo[1],
+                          comment_id: comment.id,
+                          body: commentBody,
+                        });
+                    }
+                }
+
+                if (!isUpdated) {
+                    const { data: comment } = await octokit.rest.issues.createComment({
+                        owner: repo[0],
+                        repo: repo[1],
+                        issue_number: commentID,
+                        body: commentBody,
+                    });
+                    core.info('Adding scan results as comment to PR #' + commentID)
+                }
             } catch (error:any) {
                 core.info(error);
             }
@@ -228,7 +256,7 @@ async function run (parameters:any){
             core.info('---- DEBUG OUTPUT START ----')
             core.info('---- index.ts / run() check if we need to fail the build ----')
             core.info('---- Fail build value found : '+failBuild)
-            core.info('---- DEBUG OUTPUT END ----')     
+            core.info('---- DEBUG OUTPUT END ----')
         }
 
 
